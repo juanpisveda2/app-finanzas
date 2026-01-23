@@ -6,6 +6,9 @@ export const goalFormSchema = z.object({
   targetDate: z.string().optional(),
   currentAmount: z.number().nonnegative(),
   priority: z.enum(['low', 'medium', 'high']),
+  quickAmount1: z.number().nonnegative().optional(),
+  quickAmount2: z.number().nonnegative().optional(),
+  quickAmount3: z.number().nonnegative().optional(),
 });
 
 export const goalSchema = goalFormSchema.extend({
