@@ -15,18 +15,14 @@ import {
   AppText,
 } from '../../ui/components';
 import { useGoalsStore } from '../../state/goalsStore';
-import { Goal, GoalContribution } from '../../domain/models';
+import { GoalContribution } from '../../domain/models';
 import { formatMoney } from '../../lib/money';
 import { formatDateUI, parseISODate } from '../../lib/date';
 import {
   deleteGoalContribution,
   deleteGoalContributionsByGoalId,
-  getGoalQuickAmountsMap,
   listGoalContributions,
-  saveGoalQuickAmounts,
 } from '../../data/storage/goalMetaStorage';
-import { GoalFormModal } from '../../features/goals/GoalFormModal';
-import { GoalFormValues } from '../../domain/validators';
 import { useAppTheme } from '../../ui/theme/useAppTheme';
 
 export default function GoalDetailScreen() {
@@ -37,11 +33,9 @@ export default function GoalDetailScreen() {
   const theme = useAppTheme();
 
   const [contributions, setContributions] = useState<GoalContribution[]>([]);
-  const [quickAmountsMap, setQuickAmountsMap] = useState<Record<string, number[]>>({});
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteContributionTarget, setDeleteContributionTarget] =
     useState<GoalContribution | null>(null);
-  const [editVisible, setEditVisible] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
   const goal = useMemo(
@@ -65,11 +59,6 @@ export default function GoalDetailScreen() {
     setContributions(sorted);
   }, [goalId]);
 
-  const loadQuickAmounts = useCallback(async () => {
-    const map = await getGoalQuickAmountsMap();
-    setQuickAmountsMap(map);
-  }, []);
-
   useEffect(() => {
     if (!goal) {
       void load();
@@ -79,10 +68,6 @@ export default function GoalDetailScreen() {
   useEffect(() => {
     void loadContributions();
   }, [loadContributions]);
-
-  useEffect(() => {
-    void loadQuickAmounts();
-  }, [loadQuickAmounts]);
 
   const handleDeleteGoal = async () => {
     if (!goal) {
@@ -106,51 +91,6 @@ export default function GoalDetailScreen() {
     setDeleteContributionTarget(null);
     setSnackbar('Aporte eliminado');
     await loadContributions();
-  };
-
-  const buildFormValues = (target: Goal): GoalFormValues => {
-    const quickAmounts = quickAmountsMap[target.id] ?? [];
-    return {
-      name: target.name,
-      targetAmount: target.targetAmount,
-      targetDate: target.targetDate ?? '',
-      currentAmount: target.currentAmount,
-      priority: target.priority,
-      quickAmount1: quickAmounts[0],
-      quickAmount2: quickAmounts[1],
-      quickAmount3: quickAmounts[2],
-    };
-  };
-
-  const handleSave = async (values: GoalFormValues) => {
-    if (!goal) {
-      return;
-    }
-    const normalized = values.name.trim().toLowerCase();
-    const isDuplicate = items.some((item) => {
-      const name = item.name.trim().toLowerCase();
-      return name === normalized && item.id !== goal.id;
-    });
-    if (isDuplicate) {
-      setSnackbar('Ya existe una meta con ese nombre');
-      return;
-    }
-    const updated: Goal = {
-      ...goal,
-      name: values.name,
-      targetAmount: values.targetAmount || undefined,
-      targetDate: values.targetDate || undefined,
-      currentAmount: values.currentAmount,
-      priority: values.priority,
-    };
-    await updateGoal(updated);
-    await saveGoalQuickAmounts(goal.id, [
-      values.quickAmount1 ?? 0,
-      values.quickAmount2 ?? 0,
-      values.quickAmount3 ?? 0,
-    ]);
-    await loadQuickAmounts();
-    setEditVisible(false);
   };
 
   const renderPlan = () => {
@@ -230,7 +170,10 @@ export default function GoalDetailScreen() {
       </SafeAreaView>
 
       <View style={styles.actionsRow}>
-        <AppButton mode="text" onPress={() => setEditVisible(true)}>
+        <AppButton
+          mode="text"
+          onPress={() => router.push({ pathname: '/goals/form', params: { id: goal.id } })}
+        >
           Editar meta
         </AppButton>
         <AppButton mode="text" onPress={() => setDeleteModalVisible(true)}>
@@ -269,16 +212,6 @@ export default function GoalDetailScreen() {
         )}
         ListEmptyComponent={<AppText>No hay aportes todavia.</AppText>}
         contentContainerStyle={styles.list}
-      />
-
-      <GoalFormModal
-        visible={editVisible}
-        title="Editar meta"
-        initialValues={buildFormValues(goal)}
-        existingNames={items.map((item) => item.name)}
-        originalName={goal.name}
-        onDismiss={() => setEditVisible(false)}
-        onSubmit={handleSave}
       />
 
       <AppModal

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { differenceInCalendarDays } from 'date-fns';
@@ -10,6 +10,7 @@ import {
   AppCard,
   AppCardContent,
   AppChip,
+  AppIcon,
   AppInput,
   AppModal,
   AppSnackbar,
@@ -17,26 +18,20 @@ import {
 } from '../../../ui/components';
 import { useGoalsStore } from '../../../state/goalsStore';
 import { Goal, GoalContribution } from '../../../domain/models';
-import { createId } from '../../../lib/ids';
 import { formatMoney } from '../../../lib/money';
-import { GoalFormValues } from '../../../domain/validators';
 import { formatDateUI, parseISODate, toISODate } from '../../../lib/date';
-import { GoalFormModal } from '../../../features/goals/GoalFormModal';
 import { useAppTheme } from '../../../ui/theme/useAppTheme';
 import {
   addGoalContribution,
   deleteGoalContributionsByGoalId,
   getGoalQuickAmountsMap,
   getLastGoalContributionMap,
-  saveGoalQuickAmounts,
 } from '../../../data/storage/goalMetaStorage';
 
 export default function GoalsScreen() {
-  const { items, load, addGoal, updateGoal, deleteGoal } = useGoalsStore();
+  const { items, load, updateGoal, deleteGoal } = useGoalsStore();
   const router = useRouter();
   const theme = useAppTheme();
-  const [editing, setEditing] = useState<Goal | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
   const [quickAmountsMap, setQuickAmountsMap] = useState<Record<string, number[]>>({});
   const [lastContributionMap, setLastContributionMap] = useState<
     Record<string, GoalContribution>
@@ -47,23 +42,10 @@ export default function GoalsScreen() {
   const [customDate, setCustomDate] = useState(toISODate(new Date()));
   const [customNote, setCustomNote] = useState('');
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [tempCustomDate, setTempCustomDate] = useState<Date | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
 
   const DEFAULT_QUICK_AMOUNTS = useMemo(() => [1000, 2000, 5000], []);
-
-  const defaultFormValues: GoalFormValues = useMemo(
-    () => ({
-      name: '',
-      targetAmount: undefined,
-      targetDate: '',
-      currentAmount: 0,
-      priority: 'medium',
-      quickAmount1: undefined,
-      quickAmount2: undefined,
-      quickAmount3: undefined,
-    }),
-    []
-  );
 
   useEffect(() => {
     void load();
@@ -88,16 +70,6 @@ export default function GoalsScreen() {
     }, [refreshGoalMeta])
   );
 
-  const openNew = () => {
-    setEditing(null);
-    setModalVisible(true);
-  };
-
-  const openEdit = (goal: Goal) => {
-    setEditing(goal);
-    setModalVisible(true);
-  };
-
   const openCustomAmount = (goal: Goal) => {
     setCustomGoal(goal);
     setCustomAmount('');
@@ -105,50 +77,6 @@ export default function GoalsScreen() {
     setCustomNote('');
   };
 
-  const isDuplicateName = useCallback(
-    (name: string, originalName?: string) => {
-      const normalized = name.trim().toLowerCase();
-      if (!normalized) {
-        return false;
-      }
-      const normalizedOriginal = originalName?.trim().toLowerCase();
-      return items.some((item) => {
-        const itemName = item.name.trim().toLowerCase();
-        if (normalizedOriginal && itemName === normalizedOriginal) {
-          return false;
-        }
-        return itemName === normalized;
-      });
-    },
-    [items]
-  );
-
-  const handleSave = async (values: GoalFormValues) => {
-    if (isDuplicateName(values.name, editing?.name)) {
-      setSnackbar('Ya existe una meta con ese nombre');
-      return;
-    }
-    const goal: Goal = {
-      id: editing?.id ?? createId('goal'),
-      name: values.name,
-      targetAmount: values.targetAmount || undefined,
-      targetDate: values.targetDate || undefined,
-      currentAmount: values.currentAmount,
-      priority: values.priority,
-    };
-    if (editing) {
-      await updateGoal(goal);
-    } else {
-      await addGoal(goal);
-    }
-    await saveGoalQuickAmounts(goal.id, [
-      values.quickAmount1 ?? 0,
-      values.quickAmount2 ?? 0,
-      values.quickAmount3 ?? 0,
-    ]);
-    await refreshGoalMeta();
-    setModalVisible(false);
-  };
 
   const handleQuickContribution = async (goal: Goal, amount: number) => {
     await addGoalContribution({
@@ -189,22 +117,6 @@ export default function GoalsScreen() {
     setCustomGoal(null);
   };
 
-  const buildFormValues = (goal?: Goal | null): GoalFormValues => {
-    if (!goal) {
-      return defaultFormValues;
-    }
-    const quickAmounts = quickAmountsMap[goal.id] ?? [];
-    return {
-      name: goal.name,
-      targetAmount: goal.targetAmount,
-      targetDate: goal.targetDate ?? '',
-      currentAmount: goal.currentAmount,
-      priority: goal.priority,
-      quickAmount1: quickAmounts[0],
-      quickAmount2: quickAmounts[1],
-      quickAmount3: quickAmounts[2],
-    };
-  };
 
   const getStatusLabel = (goal: Goal) => {
     if (goal.targetAmount && goal.currentAmount >= goal.targetAmount) {
@@ -238,7 +150,7 @@ export default function GoalsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <AppText variant="titleLarge">Metas</AppText>
-        <AppButton mode="outlined" onPress={openNew}>
+        <AppButton mode="outlined" onPress={() => router.push('/goals/form')}>
           Nueva meta
         </AppButton>
       </View>
@@ -310,6 +222,7 @@ export default function GoalsScreen() {
                         style={[
                           styles.chip,
                           styles.repeatChip,
+                          { borderColor: theme.colors.primary },
                           { backgroundColor: theme.colors.primaryContainer },
                         ]}
                         textStyle={{ color: theme.colors.onPrimaryContainer }}
@@ -335,8 +248,18 @@ export default function GoalsScreen() {
                       ))}
                   </View>
                 </View>
-                <View style={styles.cardActions}>
-                  <AppButton mode="text" onPress={() => openEdit(item)}>
+                <View
+                  style={[
+                    styles.cardActions,
+                    { borderTopColor: theme.colors.surfaceVariant },
+                  ]}
+                >
+                  <AppButton
+                    mode="text"
+                    onPress={() =>
+                      router.push({ pathname: '/goals/form', params: { id: item.id } })
+                    }
+                  >
                     Editar
                   </AppButton>
                   <AppButton mode="text" onPress={() => setDeleteTarget(item)}>
@@ -349,16 +272,6 @@ export default function GoalsScreen() {
         }}
         ListEmptyComponent={<AppText>No hay metas creadas aun.</AppText>}
         contentContainerStyle={styles.list}
-      />
-
-      <GoalFormModal
-        visible={modalVisible}
-        title={editing ? 'Editar meta' : 'Nueva meta'}
-        initialValues={buildFormValues(editing)}
-        existingNames={items.map((goal) => goal.name)}
-        originalName={editing?.name}
-        onDismiss={() => setModalVisible(false)}
-        onSubmit={handleSave}
       />
 
       <AppModal
@@ -377,27 +290,19 @@ export default function GoalsScreen() {
           keyboardType="numeric"
         />
         <View style={styles.section}>
-          <View style={styles.rowBetween}>
-            <AppText variant="labelLarge">Fecha</AppText>
-            <AppButton mode="outlined" onPress={() => setShowCustomDatePicker(true)}>
+          <AppText variant="labelLarge">Fecha</AppText>
+          <Pressable
+            onPress={() => {
+              setTempCustomDate(customDate ? parseISODate(customDate) : new Date());
+              setShowCustomDatePicker(true);
+            }}
+            style={[styles.dateInput, { borderColor: '#ccc' }]}
+          >
+            <AppText style={styles.dateInputText}>
               {customDate ? formatDateUI(customDate) : 'Seleccionar fecha'}
-            </AppButton>
-          </View>
-          {showCustomDatePicker && (
-            <DateTimePicker
-              value={customDate ? parseISODate(customDate) : new Date()}
-              mode="date"
-              display="default"
-              onChange={(event, date) => {
-                if (event.type === 'dismissed' || !date) {
-                  setShowCustomDatePicker(false);
-                  return;
-                }
-                setCustomDate(toISODate(date));
-                setShowCustomDatePicker(false);
-              }}
-            />
-          )}
+            </AppText>
+            <AppIcon name="calendar-outline" size={20} />
+          </Pressable>
         </View>
         <AppInput
           label="Nota (opcional)"
@@ -410,6 +315,43 @@ export default function GoalsScreen() {
             Cancelar
           </AppButton>
           <AppButton onPress={handleCustomContribution}>Agregar</AppButton>
+        </View>
+      </AppModal>
+
+      <AppModal
+        visible={showCustomDatePicker}
+        onDismiss={() => setShowCustomDatePicker(false)}
+        contentStyle={styles.datePickerModal}
+      >
+        <View style={[styles.datePickerContainer, { backgroundColor: theme.colors.surface }]}>
+          {tempCustomDate && (
+            <DateTimePicker
+              value={tempCustomDate}
+              mode="date"
+              display="spinner"
+              onChange={(event, date) => {
+                if (date) {
+                  setTempCustomDate(date);
+                }
+              }}
+              textColor={theme.colors.onSurface}
+            />
+          )}
+          <View style={styles.dateModalActions}>
+            <AppButton mode="outlined" onPress={() => setShowCustomDatePicker(false)}>
+              Cancelar
+            </AppButton>
+            <AppButton
+              onPress={() => {
+                if (tempCustomDate) {
+                  setCustomDate(toISODate(tempCustomDate));
+                }
+                setShowCustomDatePicker(false);
+              }}
+            >
+              Confirmar
+            </AppButton>
+          </View>
         </View>
       </AppModal>
 
@@ -488,8 +430,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
   },
   quickSection: {
-    marginTop: 12,
-    gap: 8,
+    marginTop: 16,
+    gap: 10,
   },
   quickPrimaryRow: {
     flexDirection: 'row',
@@ -506,13 +448,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   chip: {
-    marginRight: 4,
+    marginRight: 0,
   },
   repeatChip: {
     borderWidth: 1,
   },
   cardActions: {
-    marginTop: 8,
+    marginTop: 14,
+    paddingTop: 8,
+    borderTopWidth: 1,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 4,
@@ -520,16 +464,49 @@ const styles = StyleSheet.create({
   section: {
     gap: 8,
   },
-  rowBetween: {
+  dateInput: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: '#f9f9f9',
+  },
+  dateInputText: {
+    fontSize: 16,
   },
   modal: {
     padding: 20,
     margin: 24,
     borderRadius: 12,
     gap: 12,
+  },
+  datePickerModal: {
+    backgroundColor: 'transparent',
+    margin: 0,
+    padding: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerContainer: {
+    borderRadius: 12,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 300,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  dateModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 12,
   },
   modalActions: {
     flexDirection: 'row',
