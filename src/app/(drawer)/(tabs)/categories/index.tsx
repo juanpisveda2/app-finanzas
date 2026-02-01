@@ -104,24 +104,29 @@ export default function CategoriesScreen() {
       <AppModal
         visible={!!pendingDelete}
         onDismiss={() => setPendingDelete(null)}
-        contentStyle={[styles.modal, { backgroundColor: theme.colors.surface }]}
+        contentStyle={styles.confirmModal}
       >
-        <AppText variant="titleMedium">Eliminar categoria</AppText>
-        <AppText>Seguro que deseas eliminar esta categoria?</AppText>
-        <View style={styles.modalActions}>
-          <AppButton mode="outlined" onPress={() => setPendingDelete(null)}>
-            Cancelar
-          </AppButton>
-          <AppButton
-            onPress={async () => {
-              if (pendingDelete) {
-                await deleteCategory(pendingDelete.id);
-              }
-              setPendingDelete(null);
-            }}
-          >
-            Eliminar
-          </AppButton>
+        <View style={[styles.confirmCard, { backgroundColor: theme.colors.surface }]}>
+          <AppText variant="titleMedium">Eliminar categoria</AppText>
+          <AppText style={styles.confirmText}>
+            Esta categoria se eliminara de forma permanente.
+          </AppText>
+          <View style={styles.confirmActions}>
+            <AppButton mode="outlined" onPress={() => setPendingDelete(null)}>
+              Cancelar
+            </AppButton>
+            <AppButton
+              onPress={async () => {
+                if (pendingDelete) {
+                  await deleteCategory(pendingDelete.id);
+                }
+                setPendingDelete(null);
+              }}
+              buttonColor={theme.colors.tertiary}
+            >
+              Eliminar
+            </AppButton>
+          </View>
         </View>
       </AppModal>
 
@@ -180,16 +185,32 @@ const styles = StyleSheet.create({
   muted: {
     opacity: 0.6,
   },
-  modal: {
-    padding: 20,
-    margin: 24,
-    borderRadius: 12,
-    gap: 12,
-    maxHeight: '90%',
+  confirmModal: {
+    backgroundColor: 'transparent',
+    margin: 0,
+    padding: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  modalActions: {
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+  },
+  confirmText: {
+    opacity: 0.7,
+  },
+  confirmActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+    marginTop: 6,
   },
 });

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -51,6 +52,29 @@ export default function NewMovementScreen() {
   useEffect(() => {
     void loadCategories();
   }, [loadCategories]);
+
+  const resetForm = useCallback(() => {
+    form.reset({
+      type: 'expense',
+      amount: '',
+      date: toISODate(new Date()),
+      categoryId: '',
+      description: '',
+    });
+    setError('');
+    setBusy(false);
+    setShowCategoryPicker(false);
+    setShowDatePicker(false);
+    setTempDate(null);
+  }, [form]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) {
+        resetForm();
+      }
+    }, [id, resetForm])
+  );
 
   useEffect(() => {
     if (!id) {
@@ -113,7 +137,7 @@ export default function NewMovementScreen() {
         } else {
           await addMovement(movement);
         }
-        router.replace('/(drawer)/(tabs)/movements');
+        router.replace('/(drawer)/(tabs)/dashboard');
       } catch {
         setError('No se pudo guardar el movimiento.');
       } finally {
