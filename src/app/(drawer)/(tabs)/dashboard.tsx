@@ -31,11 +31,36 @@ export default function DashboardScreen() {
   const [busyDelete, setBusyDelete] = useState(false);
   const [error, setError] = useState('');
   const detailsAnim = useRef(new Animated.Value(0)).current;
+  const introAnims = useRef(
+    Array.from({ length: 5 }, () => new Animated.Value(0))
+  ).current;
 
   useEffect(() => {
     void loadCategories();
     void loadMonth();
   }, [loadCategories, loadMonth]);
+
+  const runIntroAnimations = () => {
+    introAnims.forEach((anim) => anim.setValue(0));
+    Animated.stagger(
+      80,
+      introAnims.map((anim) =>
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  };
+
+  useEffect(() => {
+    runIntroAnimations();
+  }, [introAnims]);
+
+  useEffect(() => {
+    runIntroAnimations();
+  }, [selectedMonth]);
 
   const totals = useMemo(() => getMonthTotals(items), [items]);
   const recent = useMemo(() => getRecentMovements(items, 5), [items]);
@@ -117,77 +142,99 @@ export default function DashboardScreen() {
     ],
   };
 
+  const introStyle = (index: number) => ({
+    opacity: introAnims[index],
+    transform: [
+      {
+        translateY: introAnims[index].interpolate({
+          inputRange: [0, 1],
+          outputRange: [16, 0],
+        }),
+      },
+    ],
+  });
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.monthRow}>
-        <AppButton mode="outlined" onPress={() => setMonth(shiftMonth(selectedMonth, -1))}>
-          {'<'}
-        </AppButton>
-        <AppText variant="titleMedium">{formatMonth(selectedMonth)}</AppText>
-        <AppButton mode="outlined" onPress={() => setMonth(shiftMonth(selectedMonth, 1))}>
-          {'>'}
-        </AppButton>
-      </View>
+      <Animated.View style={introStyle(0)}>
+        <View style={styles.monthRow}>
+          <AppButton mode="outlined" onPress={() => setMonth(shiftMonth(selectedMonth, -1))}>
+            {'<'}
+          </AppButton>
+          <AppText variant="titleMedium">{formatMonth(selectedMonth)}</AppText>
+          <AppButton mode="outlined" onPress={() => setMonth(shiftMonth(selectedMonth, 1))}>
+            {'>'}
+          </AppButton>
+        </View>
+      </Animated.View>
 
-      <View style={styles.cardsRow}>
-        <AppCard style={styles.card}>
+      <Animated.View style={introStyle(1)}>
+        <View style={styles.cardsRow}>
+          <AppCard style={styles.card}>
+            <AppCardContent>
+              <AppText variant="labelLarge">Ingresos</AppText>
+              <AppText variant="titleLarge">{formatMoney(totals.income)}</AppText>
+            </AppCardContent>
+          </AppCard>
+          <AppCard style={styles.card}>
+            <AppCardContent>
+              <AppText variant="labelLarge">Gastos</AppText>
+              <AppText variant="titleLarge">{formatMoney(totals.expense)}</AppText>
+            </AppCardContent>
+          </AppCard>
+        </View>
+      </Animated.View>
+      <Animated.View style={introStyle(2)}>
+        <AppCard>
           <AppCardContent>
-            <AppText variant="labelLarge">Ingresos</AppText>
-            <AppText variant="titleLarge">{formatMoney(totals.income)}</AppText>
+            <AppText variant="labelLarge">Balance</AppText>
+            <AppText variant="headlineMedium">{formatMoney(totals.balance)}</AppText>
           </AppCardContent>
         </AppCard>
-        <AppCard style={styles.card}>
-          <AppCardContent>
-            <AppText variant="labelLarge">Gastos</AppText>
-            <AppText variant="titleLarge">{formatMoney(totals.expense)}</AppText>
-          </AppCardContent>
-        </AppCard>
-      </View>
-      <AppCard>
-        <AppCardContent>
-          <AppText variant="labelLarge">Balance</AppText>
-          <AppText variant="headlineMedium">{formatMoney(totals.balance)}</AppText>
-        </AppCardContent>
-      </AppCard>
+      </Animated.View>
 
-      <View style={styles.section}>
-        <AppText variant="titleMedium">Movimientos recientes</AppText>
-        {recent.length === 0 ? (
-          <AppText style={styles.muted}>Todavia no hay movimientos este mes.</AppText>
-        ) : (
-          recent.map((movement) => (
-            <AppListItem
-              key={movement.id}
-              title={movement.description || 'Sin descripcion'}
-              description={formatDateUI(movement.date)}
-              onPress={() => openDetails(movement)}
-              right={() => (
-                <AppText
-                  numberOfLines={1}
-                  style={[
-                    styles.amount,
-                    movement.type === 'expense' ? styles.expense : styles.income,
-                  ]}
-                >
-                  {formatMoney(movement.amount)}
-                </AppText>
-              )}
-            />
-          ))
-        )}
-      </View>
+      <Animated.View style={introStyle(3)}>
+        <View style={styles.section}>
+          <AppText variant="titleMedium">Movimientos recientes</AppText>
+          {recent.length === 0 ? (
+            <AppText style={styles.muted}>Todavia no hay movimientos este mes.</AppText>
+          ) : (
+            recent.map((movement) => (
+              <AppListItem
+                key={movement.id}
+                title={movement.description || 'Sin descripcion'}
+                description={formatDateUI(movement.date)}
+                onPress={() => openDetails(movement)}
+                right={() => (
+                  <AppText
+                    numberOfLines={1}
+                    style={[
+                      styles.amount,
+                      movement.type === 'expense' ? styles.expense : styles.income,
+                    ]}
+                  >
+                    {formatMoney(movement.amount)}
+                  </AppText>
+                )}
+              />
+            ))
+          )}
+        </View>
+      </Animated.View>
 
-      <View style={styles.section}>
-        <AppText variant="titleMedium">Insight del mes</AppText>
-        {topCategory ? (
-          <AppText>
-            Mayor gasto en {topCategory.category.name}:{' '}
-            {formatMoney(topCategory.total)}
-          </AppText>
-        ) : (
-          <AppText style={styles.muted}>Sin datos suficientes todavia.</AppText>
-        )}
-      </View>
+      <Animated.View style={introStyle(4)}>
+        <View style={styles.section}>
+          <AppText variant="titleMedium">Insight del mes</AppText>
+          {topCategory ? (
+            <AppText>
+              Mayor gasto en {topCategory.category.name}:{' '}
+              {formatMoney(topCategory.total)}
+            </AppText>
+          ) : (
+            <AppText style={styles.muted}>Sin datos suficientes todavia.</AppText>
+          )}
+        </View>
+      </Animated.View>
 
       <AppModal
         visible={detailsVisible}

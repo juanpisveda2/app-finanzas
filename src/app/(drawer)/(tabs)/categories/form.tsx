@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
@@ -39,18 +39,39 @@ const colorOptions = [
 
 export default function CategoryFormScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, returnTo, draft, defaultKind } = useLocalSearchParams<{
+    id?: string;
+    returnTo?: string;
+    draft?: string;
+    defaultKind?: string;
+  }>();
   const { items, load, addCategory, updateCategory } = useCategoriesStore();
   const theme = useAppTheme();
   const [showPeriodConfig, setShowPeriodConfig] = useState(false);
   const [showExpenseDetails, setShowExpenseDetails] = useState(false);
   const [showVisibilityDetails, setShowVisibilityDetails] = useState(false);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [monthPickerTarget, setMonthPickerTarget] = useState<'from' | 'to' | null>(
     null
   );
   const [tempMonthDate, setTempMonthDate] = useState<Date | null>(null);
+
+  const returnToNew = useCallback(
+    (categoryId?: string, categoryKind?: string) => {
+      router.replace('/(drawer)/(tabs)/categories');
+      router.replace({
+        pathname: '/(drawer)/(tabs)/new',
+        params: {
+          ...(draft ? { draft } : {}),
+          ...(categoryId ? { selectCategoryId: categoryId } : {}),
+          ...(categoryKind ? { selectCategoryKind: categoryKind } : {}),
+        },
+      });
+    },
+    [draft, router]
+  );
 
   const form = useForm<CategoryFormInput, unknown, CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -80,7 +101,7 @@ export default function CategoryFormScreen() {
     if (!id || !editingCategory) {
       form.reset({
         name: '',
-        kind: 'expense',
+        kind: defaultKind === 'income' ? 'income' : 'expense',
         nature: 'variable',
         color: colorOptions[0],
         isBasic: false,
@@ -109,6 +130,10 @@ export default function CategoryFormScreen() {
 
   const handleSave = form.handleSubmit(
     async (values) => {
+      if (saving) {
+        return;
+      }
+      setSaving(true);
       const now = new Date().toISOString();
       const category: Category = {
         id: editingCategory?.id ?? createId('cat'),
@@ -125,12 +150,20 @@ export default function CategoryFormScreen() {
         updatedAt: now,
       };
 
-      if (editingCategory) {
-        await updateCategory(category);
-      } else {
-        await addCategory(category);
+      try {
+        if (editingCategory) {
+          await updateCategory(category);
+        } else {
+          await addCategory(category);
+        }
+        if (returnTo === 'new') {
+          returnToNew(category.id, category.kind);
+          return;
+        }
+        router.back();
+      } finally {
+        setSaving(false);
       }
-      router.back();
     },
     (errors) => {
       const firstError = Object.values(errors)[0];
@@ -408,10 +441,20 @@ export default function CategoryFormScreen() {
       </View>
 
       <View style={styles.footer}>
-        <AppButton mode="outlined" onPress={() => router.back()} style={styles.fullButton}>
+        <AppButton
+          mode="outlined"
+          onPress={() => {
+            if (returnTo === 'new') {
+              returnToNew();
+              return;
+            }
+            router.back();
+          }}
+          style={styles.fullButton}
+        >
           Cancelar
         </AppButton>
-        <AppButton onPress={handleSave} style={styles.fullButton}>
+        <AppButton loading={saving} disabled={saving} onPress={handleSave} style={styles.fullButton}>
           Guardar
         </AppButton>
       </View>

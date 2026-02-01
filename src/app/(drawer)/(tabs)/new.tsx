@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,7 +28,17 @@ import { isCategoryVisibleForMonth } from '../../../domain/rules';
 
 export default function NewMovementScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const {
+    id,
+    draft: draftParam,
+    selectCategoryId: selectCategoryIdParam,
+    selectCategoryKind: selectCategoryKindParam,
+  } = useLocalSearchParams<{
+    id?: string | string[];
+    draft?: string | string[];
+    selectCategoryId?: string | string[];
+    selectCategoryKind?: string | string[];
+  }>();
   const { addMovement, updateMovement } = useMovementsStore();
   const { items: categories, load: loadCategories } = useCategoriesStore();
   const theme = useAppTheme();
@@ -49,6 +59,9 @@ export default function NewMovementScreen() {
     },
   });
 
+  const { formState } = form;
+  const draftAppliedRef = useRef(false);
+
   useEffect(() => {
     void loadCategories();
   }, [loadCategories]);
@@ -68,13 +81,50 @@ export default function NewMovementScreen() {
     setTempDate(null);
   }, [form]);
 
+  const draft = Array.isArray(draftParam) ? draftParam[0] : draftParam;
+  const selectCategoryId = Array.isArray(selectCategoryIdParam)
+    ? selectCategoryIdParam[0]
+    : selectCategoryIdParam;
+  const selectCategoryKind = Array.isArray(selectCategoryKindParam)
+    ? selectCategoryKindParam[0]
+    : selectCategoryKindParam;
+
   useFocusEffect(
     useCallback(() => {
-      if (!id) {
+      if (!id && !formState.isDirty && !draft && !selectCategoryId) {
         resetForm();
       }
-    }, [id, resetForm])
+    }, [id, resetForm, formState.isDirty, draft, selectCategoryId])
   );
+
+  useEffect(() => {
+    if (id) {
+      return;
+    }
+    if (draft && !draftAppliedRef.current) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(draft));
+        if (decoded && typeof decoded === 'object') {
+          form.reset({
+            type: decoded.type ?? 'expense',
+            amount: decoded.amount ?? '',
+            date: decoded.date ?? toISODate(new Date()),
+            categoryId: decoded.categoryId ?? '',
+            description: decoded.description ?? '',
+          });
+          draftAppliedRef.current = true;
+        }
+      } catch {
+        // ignore invalid drafts
+      }
+    }
+
+    if (selectCategoryId) {
+      const kind = selectCategoryKind === 'income' ? 'income' : 'expense';
+      form.setValue('type', kind, { shouldDirty: true });
+      form.setValue('categoryId', selectCategoryId, { shouldDirty: true });
+    }
+  }, [draft, form, id, selectCategoryId, selectCategoryKind]);
 
   useEffect(() => {
     if (!id) {
@@ -117,6 +167,16 @@ export default function NewMovementScreen() {
     [categories, selectedType, selectedDate]
   );
 
+  useEffect(() => {
+    if (!selectedCategory) {
+      return;
+    }
+    const matchesType = categoriesByType.some((category) => category.id === selectedCategory);
+    if (!matchesType) {
+      form.setValue('categoryId', '');
+    }
+  }, [categoriesByType, form, selectedCategory]);
+
   const handleSave = form.handleSubmit(
     async (values) => {
       setBusy(true);
@@ -137,6 +197,7 @@ export default function NewMovementScreen() {
         } else {
           await addMovement(movement);
         }
+        resetForm();
         router.replace('/(drawer)/(tabs)/dashboard');
       } catch {
         setError('No se pudo guardar el movimiento.');
@@ -154,6 +215,11 @@ export default function NewMovementScreen() {
     }
   );
 
+  const handleCancel = () => {
+    resetForm();
+    router.replace('/(drawer)/(tabs)/dashboard');
+  };
+
   const typeOptions: { label: string; value: MovementType }[] = [
     { label: 'Gasto', value: 'expense' },
     { label: 'Ingreso', value: 'income' },
@@ -170,7 +236,7 @@ export default function NewMovementScreen() {
             <AppChip
               key={option.value}
               selected={selectedType === option.value}
-              onPress={() => form.setValue('type', option.value)}
+              onPress={() => form.setValue('type', option.value, { shouldDirty: true })}
             >
               {option.label}
             </AppChip>
@@ -208,21 +274,36 @@ export default function NewMovementScreen() {
         <View style={styles.quickDateButtons}>
           <AppButton 
             mode="outlined" 
-            onPress={() => form.setValue('date', toISODate(new Date()), { shouldValidate: true })}
+            onPress={() =>
+              form.setValue('date', toISODate(new Date()), {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
             style={styles.quickButton}
           >
             Hoy
           </AppButton>
           <AppButton 
             mode="outlined" 
-            onPress={() => form.setValue('date', toISODate(subDays(new Date(), 1)), { shouldValidate: true })}
+            onPress={() =>
+              form.setValue('date', toISODate(subDays(new Date(), 1)), {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
             style={styles.quickButton}
           >
             Ayer
           </AppButton>
           <AppButton 
             mode="outlined" 
-            onPress={() => form.setValue('date', toISODate(subDays(new Date(), 2)), { shouldValidate: true })}
+            onPress={() =>
+              form.setValue('date', toISODate(subDays(new Date(), 2)), {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
             style={styles.quickButton}
           >
             Hace 2 dias
@@ -256,7 +337,10 @@ export default function NewMovementScreen() {
             <AppButton
               onPress={() => {
                 if (tempDate) {
-                  form.setValue('date', toISODate(tempDate), { shouldValidate: true });
+                  form.setValue('date', toISODate(tempDate), {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
                 }
                 setShowDatePicker(false);
               }}
@@ -284,6 +368,28 @@ export default function NewMovementScreen() {
         ) : (
           <AppText style={styles.muted}>Selecciona una categoria</AppText>
         )}
+        <View style={styles.createCategoryRow}>
+          <AppText style={styles.createCategoryText}>
+            ¿Quieres crear una nueva categoria?
+          </AppText>
+          <AppButton
+            mode="text"
+            onPress={() => {
+              const values = form.getValues();
+              const serialized = encodeURIComponent(JSON.stringify(values));
+              router.push({
+                pathname: '/(drawer)/(tabs)/categories/form',
+                params: {
+                  returnTo: 'new',
+                  draft: serialized,
+                  defaultKind: selectedType,
+                },
+              });
+            }}
+          >
+            Crear categoria
+          </AppButton>
+        </View>
       </View>
 
       <Controller
@@ -294,9 +400,14 @@ export default function NewMovementScreen() {
         )}
       />
 
-      <AppButton loading={busy} onPress={handleSave}>
-        Guardar
-      </AppButton>
+      <View style={styles.footerActions}>
+        <AppButton mode="outlined" onPress={handleCancel} disabled={busy}>
+          Cancelar
+        </AppButton>
+        <AppButton loading={busy} onPress={handleSave}>
+          Guardar
+        </AppButton>
+      </View>
 
       <AppModal
         visible={showCategoryPicker}
@@ -307,7 +418,10 @@ export default function NewMovementScreen() {
           <AppText variant="titleMedium" style={styles.categoryModalTitle}>
             Elegir categoria
           </AppText>
-          <View style={styles.categoryModalList}>
+          <ScrollView
+            style={styles.categoryModalList}
+            contentContainerStyle={styles.categoryModalListContent}
+          >
             {categoriesByType.length === 0 ? (
               <AppText style={styles.noCategoriesText}>No hay categorias para este tipo.</AppText>
             ) : (
@@ -316,16 +430,24 @@ export default function NewMovementScreen() {
                   key={category.id}
                   mode={category.id === selectedCategory ? 'contained' : 'outlined'}
                   onPress={() => {
-                    form.setValue('categoryId', category.id);
+                    form.setValue('categoryId', category.id, { shouldDirty: true });
                     setShowCategoryPicker(false);
                   }}
                   style={styles.categoryButton}
                 >
-                  {category.name}
+                  <View style={styles.categoryButtonContent}>
+                    <View
+                      style={[
+                        styles.categoryColorDot,
+                        { backgroundColor: category.color ?? theme.colors.primary },
+                      ]}
+                    />
+                    <AppText>{category.name}</AppText>
+                  </View>
                 </AppButton>
               ))
             )}
-          </View>
+          </ScrollView>
           <View style={styles.categoryModalActions}>
             <AppButton mode="outlined" onPress={() => setShowCategoryPicker(false)}>
               Cancelar
@@ -366,6 +488,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  createCategoryRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  createCategoryText: {
+    opacity: 0.7,
+    flex: 1,
   },
   dateInput: {
     flexDirection: 'row',
@@ -439,12 +572,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   categoryModalList: {
-    gap: 10,
-    maxHeight: 400,
+    maxHeight: 360,
     marginBottom: 16,
+  },
+  categoryModalListContent: {
+    gap: 10,
   },
   categoryButton: {
     marginVertical: 4,
+  },
+  categoryButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   noCategoriesText: {
     textAlign: 'center',
@@ -463,5 +608,10 @@ const styles = StyleSheet.create({
   },
   modalList: {
     gap: 8,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
   },
 });

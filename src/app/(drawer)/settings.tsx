@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import {
   AppButton,
@@ -21,6 +22,7 @@ const MAX_PIN = 6;
 
 export default function SettingsScreen() {
   const { settings, toggleDarkMode, pinHash, verifyPin, setPin } = useSettingsStore();
+  const router = useRouter();
   const { load: loadCategories } = useCategoriesStore();
   const { loadMonth } = useMovementsStore();
   const { load: loadGoals } = useGoalsStore();
@@ -78,6 +80,10 @@ export default function SettingsScreen() {
 
       <AppButton mode="outlined" onPress={() => setResetModal(true)}>
         Resetear datos
+      </AppButton>
+
+      <AppButton mode="outlined" onPress={() => router.replace('/(drawer)/(tabs)/dashboard')}>
+        Volver al dashboard
       </AppButton>
 
       <AppModal

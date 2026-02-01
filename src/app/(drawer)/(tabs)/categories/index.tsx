@@ -21,6 +21,7 @@ export default function CategoriesScreen() {
   const theme = useAppTheme();
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'expense' | 'income'>('expense');
 
   useEffect(() => {
     void load();
@@ -30,6 +31,15 @@ export default function CategoriesScreen() {
     () => [...items].sort((a, b) => a.name.localeCompare(b.name)),
     [items]
   );
+  const expenseItems = useMemo(
+    () => sortedItems.filter((category) => category.kind === 'expense'),
+    [sortedItems]
+  );
+  const incomeItems = useMemo(
+    () => sortedItems.filter((category) => category.kind === 'income'),
+    [sortedItems]
+  );
+  const visibleItems = activeTab === 'expense' ? expenseItems : incomeItems;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -49,55 +59,86 @@ export default function CategoriesScreen() {
         </View>
       ) : (
         <View style={styles.list}>
-          {sortedItems.map((category) => (
-            <AppCard key={category.id} style={styles.card}>
-              <AppCardContent>
-                <View style={styles.cardHeader}>
-                  <View style={styles.titleRow}>
-                    <View
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: category.color ?? theme.colors.primary },
-                      ]}
-                    />
-                    <AppText variant="titleMedium">{category.name}</AppText>
+          <View style={styles.tabs}>
+            <AppButton
+              mode={activeTab === 'expense' ? 'contained' : 'outlined'}
+              onPress={() => setActiveTab('expense')}
+              style={styles.tabButton}
+            >
+              Gastos
+            </AppButton>
+            <AppButton
+              mode={activeTab === 'income' ? 'contained' : 'outlined'}
+              onPress={() => setActiveTab('income')}
+              style={styles.tabButton}
+            >
+              Ingresos
+            </AppButton>
+          </View>
+
+          {visibleItems.length === 0 ? (
+            <AppText style={styles.muted}>
+              {activeTab === 'expense'
+                ? 'Sin categorias de gastos.'
+                : 'Sin categorias de ingresos.'}
+            </AppText>
+          ) : (
+            visibleItems.map((category) => (
+              <AppCard key={category.id} style={styles.card}>
+                <AppCardContent>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.titleRow}>
+                      <View
+                        style={[
+                          styles.colorDot,
+                          { backgroundColor: category.color ?? theme.colors.primary },
+                        ]}
+                      />
+                      <AppText variant="titleMedium">{category.name}</AppText>
+                    </View>
+                    <View style={styles.row}>
+                      <AppChip compact>
+                        {category.kind === 'expense' ? 'Gasto' : 'Ingreso'}
+                      </AppChip>
+                      <AppChip compact>
+                        {category.nature === 'fixed' ? 'Fijo' : 'Variable'}
+                      </AppChip>
+                      {category.kind === 'expense' && category.isBasic && (
+                        <AppChip compact>Basica</AppChip>
+                      )}
+                      {category.kind === 'expense' && category.isEnjoyment && (
+                        <AppChip compact>Disfrute</AppChip>
+                      )}
+                      <AppChip compact>
+                        {category.isActive ? 'Activa' : 'Inactiva'}
+                      </AppChip>
+                    </View>
                   </View>
-                  <View style={styles.row}>
-                    <AppChip compact>{category.kind === 'expense' ? 'Gasto' : 'Ingreso'}</AppChip>
-                    <AppChip compact>
-                      {category.nature === 'fixed' ? 'Fijo' : 'Variable'}
-                    </AppChip>
-                    {category.isBasic && <AppChip compact>Basica</AppChip>}
-                    {category.isEnjoyment && <AppChip compact>Disfrute</AppChip>}
-                    <AppChip compact>
-                      {category.isActive ? 'Activa' : 'Inactiva'}
-                    </AppChip>
+                  {(category.activeFrom || category.activeTo) && (
+                    <AppText style={styles.muted}>
+                      Visible: {category.activeFrom ?? '--'} a {category.activeTo ?? '--'}
+                    </AppText>
+                  )}
+                  <View style={styles.actions}>
+                    <AppButton
+                      mode="text"
+                      onPress={() =>
+                        router.push({
+                          pathname: '/(drawer)/(tabs)/categories/form',
+                          params: { id: category.id },
+                        })
+                      }
+                    >
+                      Editar
+                    </AppButton>
+                    <AppButton mode="text" onPress={() => setPendingDelete(category)}>
+                      Eliminar
+                    </AppButton>
                   </View>
-                </View>
-                {(category.activeFrom || category.activeTo) && (
-                  <AppText style={styles.muted}>
-                    Visible: {category.activeFrom ?? '--'} a {category.activeTo ?? '--'}
-                  </AppText>
-                )}
-                <View style={styles.actions}>
-                  <AppButton
-                    mode="text"
-                    onPress={() =>
-                      router.push({
-                        pathname: '/(drawer)/(tabs)/categories/form',
-                        params: { id: category.id },
-                      })
-                    }
-                  >
-                    Editar
-                  </AppButton>
-                  <AppButton mode="text" onPress={() => setPendingDelete(category)}>
-                    Eliminar
-                  </AppButton>
-                </View>
-              </AppCardContent>
-            </AppCard>
-          ))}
+                </AppCardContent>
+              </AppCard>
+            ))
+          )}
         </View>
       )}
 
@@ -154,6 +195,13 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 12,
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tabButton: {
+    flex: 1,
   },
   card: {
     borderRadius: 16,

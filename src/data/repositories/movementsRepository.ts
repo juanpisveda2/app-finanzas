@@ -16,7 +16,7 @@ export const MovementsRepository = {
     const rows = await db.getAllAsync<MovementRow>(
       `SELECT * FROM movements
        WHERE date >= ? AND date <= ?
-       ORDER BY date DESC`,
+       ORDER BY date DESC, id DESC`,
       [start, end]
     );
     return rows.map(mapMovement);

@@ -16,9 +16,23 @@ export function getMonthTotals(movements: Movement[]) {
 }
 
 export function getRecentMovements(movements: Movement[], limit: number = 5) {
+  const getIdTime = (id: string) => {
+    const parts = id.split('_');
+    if (parts.length < 3) {
+      return 0;
+    }
+    const time = Number.parseInt(parts[1], 36);
+    return Number.isNaN(time) ? 0 : time;
+  };
   return [...movements]
     .sort(
-      (a, b) => parseISODate(b.date).getTime() - parseISODate(a.date).getTime()
+      (a, b) => {
+        const diff = parseISODate(b.date).getTime() - parseISODate(a.date).getTime();
+        if (diff !== 0) {
+          return diff;
+        }
+        return getIdTime(b.id) - getIdTime(a.id);
+      }
     )
     .slice(0, limit);
 }
